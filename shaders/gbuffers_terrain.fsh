@@ -3,6 +3,7 @@
 uniform sampler2D gtexture;
 uniform sampler2D lightmap;
 uniform sampler2DShadow shadowtex0;
+uniform float shadowMapResolution;
 
 in vec2 texcoord;
 in vec2 lmcoord;
@@ -12,23 +13,27 @@ in vec4 shadowPos;
 /* RENDERTARGETS: 0 */
 layout(location = 0) out vec4 color;
 
-float getShadow() {
-    vec3 projected = shadowPos.xyz / max(shadowPos.w, 0.0001);
-    projected = projected * 0.5 + 0.5;
-    if (projected.x < 0.0 || projected.x > 1.0 ||
-        projected.y < 0.0 || projected.y > 1.0 ||
-        projected.z < 0.0 || projected.z > 1.0) return 1.0;
-
-    // Small depth bias helps reduce self-shadowing.
-    return texture(shadowtex0, vec3(projected.xy, projected.z - 0.0015));
+float filteredShadow(vec3 p) {
+    float sum = 0.0;
+    float texel = 1.0 / max(shadowMapResolution, 1.0);
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            sum += texture(shadowtex0, vec3(p.xy + vec2(x, y) * texel, p.z - 0.0013));
+        }
+    }
+    return sum / 9.0;
 }
 
 void main() {
     vec4 albedo = texture(gtexture, texcoord) * glcolor;
     if (albedo.a < 0.1) discard;
-
-    vec4 lit = albedo * texture(lightmap, lmcoord);
-    float shadow = getShadow();
-    lit.rgb *= mix(0.48, 1.0, shadow);
-    color = lit;
+    vec3 p = shadowPos.xyz / max(shadowPos.w, 0.0001);
+    p = p * 0.5 + 0.5;
+    float shade = 1.0;
+    if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0 && p.z >= 0.0 && p.z <= 1.0)
+        shade = filteredShadow(p);
+    vec3 rgb = albedo.rgb * texture(lightmap, lmcoord).rgb;
+    rgb *= mix(0.42, 1.0, shade);
+    rgb = mix(rgb, rgb * vec3(1.045, 1.035, 1.02), 0.35);
+    color = vec4(rgb, albedo.a);
 }
