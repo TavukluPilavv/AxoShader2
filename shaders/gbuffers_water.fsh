@@ -14,24 +14,27 @@ layout(location = 0) out vec4 color;
 
 void main() {
     float t = frameTimeCounter;
-    // Two crossing wave fields; inexpensive UV distortion, no raymarching.
-    vec2 waveA = vec2(sin(texcoord.y * 36.0 + t * 1.45),
-                      cos(texcoord.x * 29.0 - t * 1.10));
-    vec2 waveB = vec2(sin((texcoord.x + texcoord.y) * 52.0 - t * 1.8),
-                      cos((texcoord.x - texcoord.y) * 43.0 + t * 1.35));
-    vec2 distortion = (waveA * 0.65 + waveB * 0.35) * 0.006;
-    vec4 water = texture(gtexture, texcoord + distortion) * glcolor;
-    vec3 light = texture(lightmap, lmcoord).rgb;
 
-    // Narrow, moving highlights imitate sun sparkles on the wave crests.
-    float crest1 = sin(texcoord.x * 74.0 + texcoord.y * 31.0 + t * 2.2);
-    float crest2 = sin(texcoord.y * 91.0 - texcoord.x * 28.0 - t * 1.7);
-    float sparkle = pow(max(crest1 * crest2, 0.0), 7.0) * 0.20;
-    sparkle *= (1.0 - rainStrength * 0.65);
+    // Deep, dark blue-green water. Smooth directional waves (no crossed diagonal pattern).
+    vec2 uv = texcoord;
+    float wave1 = sin(uv.x * 32.0 + t * 1.15 + sin(uv.y * 5.0 + t * 0.25) * 1.4);
+    float wave2 = sin(uv.y * 24.0 - t * 0.78 + sin(uv.x * 4.0 - t * 0.2) * 1.1);
+    float wave3 = sin((uv.x * 0.72 + uv.y * 0.28) * 17.0 + t * 0.52);
+    vec2 flow = vec2(wave1, wave2) * 0.0025 + vec2(wave3, -wave3) * 0.0012;
 
-    // Natural blue-green water; storm water becomes darker and less sparkly.
-    vec3 tint = mix(vec3(0.72, 0.88, 0.94), vec3(0.58, 0.68, 0.72), rainStrength * 0.55);
-    vec3 rgb = water.rgb * light * tint;
-    rgb = mix(rgb, rgb + vec3(0.55, 0.72, 0.82) * sparkle, 0.75);
-    color = vec4(rgb, water.a);
+    vec4 tex = texture(gtexture, uv + flow) * glcolor;
+    vec3 lm = texture(lightmap, lmcoord).rgb;
+
+    // Low, restrained highlights on wave crests; rain suppresses reflections.
+    float crest = max(wave1 * 0.55 + wave2 * 0.35 + wave3 * 0.10, 0.0);
+    float highlight = pow(crest, 5.0) * 0.10 * (1.0 - rainStrength * 0.8);
+
+    vec3 deepWater = vec3(0.035, 0.105, 0.145);
+    vec3 waterTint = mix(deepWater, vec3(0.025, 0.065, 0.085), rainStrength * 0.6);
+    vec3 rgb = tex.rgb * lm * waterTint * 1.65;
+    rgb += vec3(0.10, 0.22, 0.28) * highlight;
+
+    // Keep a darker underwater body and subtle moving surface sheen.
+    rgb *= 0.88 + 0.12 * (0.5 + 0.5 * wave2);
+    color = vec4(rgb, tex.a);
 }
