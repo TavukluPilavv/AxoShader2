@@ -36,28 +36,32 @@ float noise3(vec3 p) {
 void main() {
     vec3 dir = normalize(skyDir);
     float horizon = pow(1.0 - abs(dir.y), 3.0);
-    vec3 zenith = skyColor * vec3(0.78, 0.94, 1.12);
-    vec3 horizonColor = skyColor * vec3(1.08, 1.02, 0.96);
+    vec3 zenith = skyColor * vec3(0.72, 0.91, 1.16);
+    vec3 horizonColor = skyColor * vec3(1.13, 1.03, 0.92);
     vec3 sky = mix(zenith, horizonColor, horizon);
 
     vec3 sunDir = normalize(sunPosition);
     float sunDot = max(dot(dir, sunDir), 0.0);
-    float disk = smoothstep(0.9992, 0.99975, sunDot);
-    float halo = pow(sunDot, 24.0) * 0.18 + pow(sunDot, 90.0) * 0.26;
-    vec3 sunGold = vec3(1.0, 0.78, 0.42);
-    sky += sunGold * (disk * 3.2 + halo);
+    // Defined solar disk with soft aureole and stronger warm near-sun glow.
+    float disk = smoothstep(0.99935, 0.99978, sunDot);
+    float corona = pow(sunDot, 18.0) * 0.20 + pow(sunDot, 65.0) * 0.42;
+    float broadGlow = pow(sunDot, 7.0) * 0.075;
+    vec3 sunColor = vec3(1.0, 0.82, 0.57);
+    sky += sunColor * (disk * 4.0 + corona + broadGlow);
 
-    // Low-cost procedural cloud veil. Soft layered noise instead of expensive raymarching.
-    float cloudHeight = max(dir.y, 0.035);
-    vec3 cloudP = vec3(dir.xz / cloudHeight * 1.7, 0.0);
-    cloudP.x += 0.018 * cloudP.y;
-    float n1 = noise3(vec3(cloudP.xy * 0.65, 0.0));
-    float n2 = noise3(vec3(cloudP.xy * 1.45 + vec2(2.7, 4.1), 0.0));
-    float cloudNoise = n1 * 0.68 + n2 * 0.32;
-    float cloudMask = smoothstep(0.56, 0.73, cloudNoise) * smoothstep(0.02, 0.18, dir.y);
-    cloudMask *= (1.0 - rainStrength * 0.25);
-    vec3 cloudColor = mix(vec3(0.72, 0.79, 0.86), vec3(1.0, 0.96, 0.88), max(dot(dir, sunDir), 0.0));
-    sky = mix(sky, cloudColor, cloudMask * 0.68);
+    // Three inexpensive noise layers create soft cloud volume-like depth.
+    float cloudHeight = max(dir.y, 0.045);
+    vec2 cloudUV = dir.xz / cloudHeight * 1.35;
+    float n0 = noise3(vec3(cloudUV * 0.48, 0.0));
+    float n1 = noise3(vec3(cloudUV * 0.95 + vec2(3.4, 1.7), 0.0));
+    float n2 = noise3(vec3(cloudUV * 1.9 + vec2(7.1, 5.2), 0.0));
+    float density = n0 * 0.58 + n1 * 0.29 + n2 * 0.13;
+    float cloudMask = smoothstep(0.57, 0.76, density) * smoothstep(0.025, 0.20, dir.y);
+    cloudMask *= 1.0 - rainStrength * 0.22;
+    float sunFacing = max(dot(normalize(vec3(dir.x, dir.y + 0.18, dir.z)), sunDir), 0.0);
+    vec3 cloudShade = mix(vec3(0.64, 0.70, 0.78), vec3(1.0, 0.94, 0.82), pow(sunFacing, 1.4));
+    cloudShade *= 1.0 - rainStrength * 0.28;
+    sky = mix(sky, cloudShade, cloudMask * 0.60);
 
     color = vec4(sky * skyVertexColor.rgb, 1.0);
 }
