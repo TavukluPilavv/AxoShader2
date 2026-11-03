@@ -1,0 +1,20 @@
+name: Build AxoShader2 ZIP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package shader pack
+        run: |
+          mkdir -p dist
+          zip -r dist/AxoShader2.zip pack.mcmeta shaders
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AxoShader2
+          path: dist/AxoShader2.zip
